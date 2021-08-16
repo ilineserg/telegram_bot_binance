@@ -8,9 +8,9 @@ import typing
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
 from telegram import Bot
 
-from multiprocessing import Process
 from threading import Thread
 from conf import TA_API_TOKEN, TLG_TOKEN, SYMBOLS, INTERVAL, INDICATORS, CHAT_ID
+from conf import MACD_EXPECTED_VALUE, RSI_EXPECTED_VALUE, AROON_EXPECTED_VALUE, STOCH_EXPECTED_VALUE, ULTOSC_EXPECTED_VALUE
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +29,8 @@ exit_event = threading.Event()
 def app_binance(indicators, symbols, interval, ta_api_token, chat_id, value_indicators):
     while True:
         for symbol in symbols:
+            indicators_true = 0
+
             for indicator in indicators:
                 indicator_value = value_indicators(
                     indicator=indicator,
@@ -41,10 +43,22 @@ def app_binance(indicators, symbols, interval, ta_api_token, chat_id, value_indi
                     if isinstance(value, float):
                         value = round(value)
                     expected_value = indicator_value.get("expected_value", "Set expected data")
-                    if value != expected_value:
+                    if indicator == 'macd' and value and value == expected_value:
+                        indicators_true += 1
+                    if indicator == 'rsi' and value and value < expected_value:
+                        indicators_true += 1
+                    if indicator == 'aroon' and value and value < expected_value:
+                        indicators_true += 1
+                    if indicator == 'stoch' and value and value < expected_value:
+                        indicators_true += 1
+                    if indicator == 'ultosc' and value and value == expected_value:
+                        indicators_true += 1
+
+                    print(indicators_true)
+                    if indicators_true == 5:
                         bot.sendMessage(
                             chat_id=chat_id,
-                            text=f"{indicator}\nValue: {value}\nExpected value: {expected_value}"
+                            text=f"All indicators on expected values!"
                         )
                         logger.info(f"Send message: {indicator}\nValue: {value}\nExpected value: {expected_value}")
                 time.sleep(16)
@@ -58,27 +72,27 @@ def get_value_indicator(indicator, symbol, inter, token):
         "macd": {
             "url": f"https://api.taapi.io/macd?secret={token}&exchange=binance&symbol={symbol}&interval={inter}",
             "value": "valueMACD",
-            "expected_value": 0,
+            "expected_value": MACD_EXPECTED_VALUE,
         },
         "rsi": {
             "url": f"https://api.taapi.io/rsi?secret={token}&exchange=binance&symbol={symbol}&interval={inter}",
             "value": "value",
-            "expected_value": 0,
+            "expected_value": RSI_EXPECTED_VALUE,
         },
         "aroon": {
             "url": f"https://api.taapi.io/aroon?secret={token}&exchange=binance&symbol={symbol}&interval={inter}",
-            "value": "value",  # TODO какоое значение valueAroonDown, valueAroonUp
-            "expected_value": 0,
+            "value": "valueAroonUp",
+            "expected_value": AROON_EXPECTED_VALUE,
         },
         "stoch": {
             "url": f"https://api.taapi.io/stoch?secret={token}&exchange=binance&symbol={symbol}&interval={inter}",
-            "value": "value",  # TODO какоое значение valueSlowK, valueSlowD
-            "expected_value": 0,
+            "value": "valueSlowD",
+            "expected_value": STOCH_EXPECTED_VALUE,
         },
         "ultosc": {
             "url": f"https://api.taapi.io/ultosc?secret={token}&exchange=binance&symbol={symbol}&interval={inter}",
             "value": "value",
-            "expected_value": 0,
+            "expected_value": ULTOSC_EXPECTED_VALUE,
         },
     }
     resource = requests.get(
@@ -95,19 +109,10 @@ def get_value_indicator(indicator, symbol, inter, token):
     return
 
 
-process = Process(target=app_binance, args=(
-        indicators,
-        symbols,
-        interval,
-        ta_api_token,
-        chat_id,
-        get_value_indicator,
-    )
-                           )
-
 thread = None
 
 
+# function to start app
 def start(update, context):
     global thread
     thread = Thread(target=app_binance, args=(
@@ -124,6 +129,7 @@ def start(update, context):
     logger.info("Start app")
 
 
+# function to stop app
 def stop(update, context):
     global thread
     if thread:
@@ -136,13 +142,13 @@ def stop(update, context):
 # function to handle normal text
 def text(update, context):
     text_received = update.message.text
-    update.message.reply_text(f'Did you said "{text_received}" ?')
+    update.message.reply_text(f'Did you said "{text_received}"? It is unknown command!')
 
 
 def telegram_bot(token):
 
     # create the updater, that will automatically create also a dispatcher and a queue to
-    # make them dialoge
+    # make them dialog
     updater = Updater(token, use_context=True)
     dispatcher = updater.dispatcher
 

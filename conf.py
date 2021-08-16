@@ -7,7 +7,7 @@ TLG_TOKEN = os.environ.get('TLG_TOKEN')
 INDICATORS = ["macd", "rsi", "aroon", "stoch", "ultosc",]
 SYMBOLS = ["BTC/USDT", ]
 INTERVAL = "15m"
-CHAT_ID = "344451118"  # TODO: value
+CHAT_ID = ""  # TODO: value
 
 # indicators values
 MACD_EXPECTED_VALUE = -35
